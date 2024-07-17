@@ -1,4 +1,4 @@
-# BreadcrumbsSmart Chessboard with AI Features
+# Smart Chessboard with AI Features
 ## Project Overview
 This repository contains the software configurations, source code, and supporting documents for the Smart Chessboard project, developed as a final year project in telecommunications engineering. The project aims to enhance traditional chess gameplay with advanced software solutions and AI, providing an interactive and intelligent gaming experience.
 Project Description
