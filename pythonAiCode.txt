@@ -1,0 +1,260 @@
+import serial
+import time
+
+
+'''
+if __name__ == '__main__':
+	
+	ser = serial.Serial('/dev/ttyACM0', 9600, timeout=1)
+	ser.reset_input_buffer()
+		ser.write(b"Hello from Rasperry Pi!\n")
+		line = ser.readline().decode('utf-8').rstrip()
+		print(line)
+		time.sleep(1)
+'''
+
+class Comms(object):
+    # Create str for objects needed for game
+
+    def __init__(self, table, computerComms):
+        #self.ser = serial.Serial('/dev/ttyACM0', 9600, timeout=1)
+        if not computerComms:
+            while True:
+                try:
+                    for i in range(999):
+                        filedir = '/dev/ttyACM' + str(i)
+                        try:
+                            self.ser = serial.Serial(filedir, 115200, timeout=1)
+                        except:
+                            pass
+                    self.ser.reset_input_buffer()
+                    self.ser.write(b"1")
+                    # print(self.ser.readline().decode('utf-8').rstrip())
+                    break
+                except:
+                    pass
+        '''Change from computer to Teensy'''
+        self.table = table
+        self.computerComms = computerComms
+        self.message = None
+        self.toSend = None
+
+    # -------- TEST ---------
+    def test_method(self):
+        self._fromTeensyProtocol['m'](self)
+        self.send_to_teensy(input())
+        self.read_from_teensy()
+
+    # ------ COMP ------
+    def fake_teensy_menu(self):
+        return input().lower()
+
+    ''' ----- COMMS TO TEENSY -----'''
+    # --- SEND TO ---
+    def send_to_teensy(self, toSend):
+        self.toSend = toSend
+        print("toSend:")
+        print(toSend)
+        self._toTeensyProtocol[self.toSend[0]](self)
+
+    def write_to_teensy(self):
+        self.toSend = self.toSend + "*"
+        self.ser.write(self.toSend.encode())
+
+    # --- PROTOCOL ---
+    def give_move(self):
+        # give move to teensy
+        print("giving aimove")
+        print(self.toSend)
+        self.write_to_teensy()
+        print("aimove sent")
+        # wait to make sure it was moved
+        #self.message = ''
+        #while self.message == '':
+        #    self.message = self.ser.readline().decode('utf-8').rstrip()
+        #self.confirm_ai_move()
+
+    def give_hint(self):
+        print("giving Hint")
+        print(self.toSend)
+        self.write_to_teensy()
+        print("hint sent")
+
+    def illegal_move(self):
+        print("Illegal Move")
+        print(self.toSend)
+        self.write_to_teensy()
+        print("Illegal sent")
+
+    def legal_move(self):
+        print("Legal Move")
+        print(self.toSend)
+        self.write_to_teensy()
+        print("Legal sent")
+
+    def possible_pos(self):
+        print("giving Pos")
+        print(self.toSend)
+        self.write_to_teensy()
+        print("pos sent")
+
+    def game_start(self):
+        print("starting game")
+        print(self.toSend)
+        self.write_to_teensy()
+        print("game started")
+
+    def end_game(self):
+        print("ending game")
+        print(self.toSend)
+        self.write_to_teensy()
+        print("game started")
+    """
+    def show_game_timer(self):
+        pass
+    """
+
+    _toTeensyProtocol = {
+        'A': give_move,     #Ad6d8 --- ai move -------------------------------
+        'H' : give_hint,    #Hc2c4 --- square to light up ---------------------
+        'P' : possible_pos, #Pc3c4d3 --- light up available moves ---------
+        'I': illegal_move,  #I --- light up red ----------------------
+        'L': legal_move,    #Lh --- (h)uman or (a)i ------------------
+        'G' : game_start,   #G --- start game ------------------------
+        'E' : end_game,     #E --- (w)hite (b)lack or (d)raw -------------
+        # 'F' : give_fen, # board set up FEN
+        # 'T' : show_game_timer,
+        # 'C' : challenge_level,
+    }
+
+    ''' ---- COMMS FROM TEENSY ---- '''
+    # --- READ FROM ---
+    def read_from_teensy(self):
+        # sort what message by reading the first letter
+        self.message = None
+        print("Reading from teensy")
+        while True:
+            try:
+                if self.computerComms:
+                    self.message = input().lower()
+                    return self.message
+                else:
+                    # print("waiting for message")
+                    self.message = self.ser.readline().decode('utf-8').rstrip().lower()
+                    # print("self.message:")
+                    print(self.message)
+                    # print("self.message[0]:")
+                    print(self.message[0])
+                if self.message[0] in self._fromTeensyProtocol:
+                    print("is in")
+                    self._fromTeensyProtocol[self.message[0]](self)
+                    print("breaking")
+                    break
+                else:
+                    print("is not in")
+                    self.message = None
+                    if self.computerComms:
+                        print("Error, not a command")
+            except:
+                pass
+
+    # --- PROTOCOL ---
+    def make_move(self):
+        print("making move")
+        move = self.message[1] + self.message[2] + self.message[3] + self.message[4]
+        # Pawn Promotion
+        try:
+            if self.message[5] == 'q' or self.message[5] == 'r' or self.message[5] == 'b' or self.message[5] == 'n':
+                print("Pawn Promo")
+                move = move + self.message[5]
+            else:
+                print("no Pawn promo")
+        except:
+            print("no Pawn promo option")
+            pass
+        # has move
+        # to convoluted?
+        try:
+            if self.table.game.get_move(move):
+                print("Move Made")
+            else: # illegalmove
+                print("illegal move")
+                self.send_to_teensy("I")
+        except:
+            print("illegal move")
+            self.send_to_teensy("I")
+
+    def get_hint(self):
+        print("get_hint")
+        self.send_to_teensy("H" + self.table.game.get_ai_hint())
+
+    def get_ai_move(self):
+        print("get_ai_move")
+        self.send_to_teensy("A" + self.table.game.get_ai_move())
+
+    def get_possible_pos(self):
+        print("get_possible_pos")
+        startPos = self.message[1] + self.message[2]
+        possiblePosStr = startPos
+        print("Legal Moves:")
+        legalMoves = self.table.game.get_legal_moves_per_piece(startPos)
+        print(legalMoves)
+        for possiblePos in legalMoves:
+            print(possiblePos)
+            possiblePosStr = possiblePosStr + possiblePos[2] + possiblePos[3]
+            # in case of a pawn promotion!???
+            # if possiblePos.length > 4:
+            #     possiblePosStr = possiblePosStr + possiblePos[4]
+        print("Sending")
+        print(possiblePosStr)
+        self.send_to_teensy("P" + possiblePosStr)
+        print("sent")
+
+    def game_settings(self):
+        print("comm settings")
+        #self.table.test_print()
+        #self.table.test_message(self.message)
+        self.table.settings(self.message)
+
+    def received(self):
+        print("received")
+
+    """
+    def continue_game(self):
+        pass
+
+    def set_game_mode(self):
+        pass
+
+    def set_ai_difficulty(self):
+        pass
+
+    def set_game_timer(self):
+        pass
+
+    def set_challenge_level(self):
+        pass
+
+    def new_user(self):
+        pass
+
+    def get_user(self):
+        pass
+    """
+
+    _fromTeensyProtocol = {
+        'a': get_ai_move, # a ---
+        'm': make_move,  # mc2c4 --------------
+        'h': get_hint,  # h ---------------
+        'p': get_possible_pos, # pc2
+        's' : game_settings, #s
+        '-' : received, #
+        # 'g': set_game_mode,  # ---------------
+        # 'd': set_ai_difficulty,  # -----------
+        # 'c' : continue_game, # bool
+        # 'u' : get_user,
+        # 'n' : new_user,
+        # 't' : set_game_timer, # 5 5
+        # 'l' : set_challenge_level, # puzzles
+        # 'r' : record timer
+    }
